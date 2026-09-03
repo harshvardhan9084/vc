@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Call</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d0d0d;
+  --glass: rgba(255,255,255,0.06);
+  --glass-border: rgba(255,255,255,0.1);
+  --green: #22c55e;
+  --red: #ef4444;
+  --text: #f0f0f0;
+  --muted: rgba(255,255,255,0.4);
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── JOIN SCREEN ── */
+#join-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0;
+  padding: 32px 24px;
+}
+
+.join-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 32px;
+  text-transform: uppercase;
+}
+
+.code-display {
+  font-size: clamp(3rem, 18vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text);
+  text-align: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.code-display::after {
+  content: 'tap to copy';
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+.copied-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--green);
+  font-size: 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  border-radius: 8px;
+}
+.copied-flash.show { opacity: 1; }
+
+.divider {
+  width: 48px;
+  height: 1px;
+  background: var(--glass-border);
+  margin: 28px 0;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+input[type="text"] {
+  flex: 1;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 14px 16px;
+  outline: none;
+  text-transform: uppercase;
+  -webkit-appearance: none;
+}
+input::placeholder { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 0.9rem; }
+input:focus { border-color: rgba(255,255,255,0.25); }
+
+.btn-join {
+  background: var(--text);
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 14px 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+}
+.btn-join:active { opacity: 0.8; }
+
+.status-line {
+  margin-top: 20px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 18px;
+}
+.status-line.ok { color: var(--green); }
+.status-line.err { color: var(--red); }
+
+/* ── CALL SCREEN ── */
+#call-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+/* Remote — full screen */
+#remote-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111;
+  display: block;
+}
+
+/* Waiting overlay */
+#waiting-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.pulse-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.08);
+  animation: pulse 2s ease-out infinite;
+}
+.pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.04);
+  animation: pulse 2s ease-out infinite 0.5s;
+}
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* Local — PiP corner */
+#local-video {
+  position: absolute;
+  top: env(safe-area-inset-top, 16px);
+  right: 16px;
+  width: 100px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #1a1a1a;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  cursor: grab;
+  z-index: 10;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  touch-action: none;
+}
+#local-video.dragging { cursor: grabbing; box-shadow: 0 8px 32px rgba(0,0,0,0.8); }
+
+/* Controls bar */
+#controls-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 32px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  z-index: 20;
+}
+
+.ctrl {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-appearance: none;
+  transition: transform 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+.ctrl:active { transform: scale(0.92); }
+
+.ctrl-icon {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+}
+.ctrl-icon.muted-state { background: rgba(255,255,255,0.9); color: #000; }
+
+.ctrl-end {
+  background: var(--red);
+  color: #fff;
+  width: 62px;
+  height: 62px;
+}
+
+/* Connection dot */
+#conn-dot {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 12px) + 12px);
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.5);
+  z-index: 10;
+}
+#conn-dot-circle {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transition: background 0.4s;
+}
+#conn-dot-circle.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* SVG icons */
+svg { display: block; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<!-- ── JOIN SCREEN ── -->
+<div id="join-screen">
+  <div class="join-label">Your room code</div>
+
+  <div class="code-display" id="my-code" onclick="copyCode()">
+    <span id="code-text">…</span>
+    <div class="copied-flash" id="copy-flash">Copied</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="join-row">
+    <input type="text" id="peer-input" placeholder="Enter their code" maxlength="6" autocomplete="off" spellcheck="false" inputmode="numeric" />
+    <button class="btn-join" id="call-btn" onclick="startCall()">Call</button>
+  </div>
+
+  <div class="status-line" id="status">Getting camera…</div>
+</div>
+
+<!-- ── CALL SCREEN ── -->
+<div id="call-screen">
+  <video id="remote-video" autoplay playsinline></video>
+
+  <div id="waiting-overlay">
+    <div class="pulse-ring">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.9a16 16 0 0 0 6.16 6.16l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+    </div>
+    <span id="waiting-text">Waiting for other side…</span>
+  </div>
+
+  <video id="local-video" autoplay playsinline muted></video>
+
+  <div id="conn-dot">
+    <div id="conn-dot-circle"></div>
+    <span id="conn-label">connecting</span>
+  </div>
+
+  <div id="controls-bar">
+    <button class="ctrl ctrl-icon" id="mic-btn" onclick="toggleMic()" title="Mute mic">
+      <svg id="mic-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+
+    <button class="ctrl ctrl-end" id="end-btn" onclick="endCall()" title="End call">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.45-2.94z"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+      </svg>
+    </button>
+
+    <button class="ctrl ctrl-icon" id="cam-btn" onclick="toggleCam()" title="Camera off">
+      <svg id="cam-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<audio id="ring-audio"></audio>
+
+<script>
+// ── Config ─────────────────────────────────────────────────
+// Simple 6-digit numeric code = easy to read aloud across two phones
+const CODE_LEN = 6;
+const PEERJS_CONFIG = {
+  // Uses PeerJS cloud — works immediately. For production swap to your own server.
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ]
+  },
+  // Low-latency settings
+  reliable: false, // media doesn't need reliable (built-in to WebRTC media)
+};
+
+// ── State ──────────────────────────────────────────────────
+let peer = null;
+let myCode = '';
+let localStream = null;
+let currentCall = null;
+let micOn = true, camOn = true;
+
+const joinScreen   = document.getElementById('join-screen');
+const callScreen   = document.getElementById('call-screen');
+const codeText     = document.getElementById('code-text');
+const peerInput    = document.getElementById('peer-input');
+const statusEl     = document.getElementById('status');
+const localVideo   = document.getElementById('local-video');
+const remoteVideo  = document.getElementById('remote-video');
+const waitOverlay  = document.getElementById('waiting-overlay');
+const waitText     = document.getElementById('waiting-text');
+const connDot      = document.getElementById('conn-dot-circle');
+const connLabel    = document.getElementById('conn-label');
+
+// ── Generate short numeric code ────────────────────────────
+function genCode() {
+  return Array.from({length: CODE_LEN}, () => Math.floor(Math.random() * 10)).join('');
+}
+
+// ── Copy code ──────────────────────────────────────────────
+function copyCode() {
+  navigator.clipboard.writeText(myCode).then(() => {
+    const flash = document.getElementById('copy-flash');
+    flash.classList.add('show');
+    setTimeout(() => flash.classList.remove('show'), 1200);
+  }).catch(() => {
+    // fallback: select text
+    const range = document.createRange();
+    range.selectNode(document.getElementById('code-text'));
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+  });
+}
+
+// ── Get camera/mic ─────────────────────────────────────────
+async function getMedia() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'user',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    });
+    localVideo.srcObject = localStream;
+    setStatus('Ready — share your code', 'ok');
+    return true;
+  } catch (e) {
+    setStatus('Camera/mic blocked — allow access and reload', 'err');
+    return false;
+  }
+}
+
+// ── Init PeerJS ────────────────────────────────────────────
+function initPeer() {
+  myCode = genCode();
+  codeText.textContent = myCode;
+
+  peer = new Peer(myCode, PEERJS_CONFIG);
+
+  peer.on('open', (id) => {
+    myCode = id;
+    codeText.textContent = id;
+    setStatus('Ready — share your code', 'ok');
+  });
+
+  peer.on('call', (incomingCall) => {
+    // Auto-answer — no security needed (testing only)
+    answerCall(incomingCall);
+  });
+
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') {
+      // code taken — regenerate
+      peer.destroy();
+      initPeer();
+      return;
+    }
+    setStatus('Connection error — reload', 'err');
+    console.error(e);
+  });
+}
+
+// ── Make a call ────────────────────────────────────────────
+function startCall() {
+  const theirCode = peerInput.value.trim().replace(/\D/g, '');
+  if (theirCode.length < 4) {
+    setStatus('Enter their code', 'err');
+    return;
+  }
+  if (!localStream) {
+    setStatus('Camera not ready yet', 'err');
+    return;
+  }
+  setStatus('Calling…', '');
+  showCallScreen('Calling…');
+
+  const call = peer.call(theirCode, localStream);
+  setupCallHandlers(call);
+}
+
+// ── Answer incoming ────────────────────────────────────────
+function answerCall(incomingCall) {
+  showCallScreen('Connecting…');
+  incomingCall.answer(localStream);
+  setupCallHandlers(incomingCall);
+}
+
+// ── Wire up call events ────────────────────────────────────
+function setupCallHandlers(call) {
+  currentCall = call;
+
+  call.on('stream', (remoteStream) => {
+    remoteVideo.srcObject = remoteStream;
+    waitOverlay.style.display = 'none';
+    connDot.classList.add('live');
+    connLabel.textContent = 'live';
+
+    // Ensure audio plays (mobile needs user gesture unlock)
+    remoteVideo.play().catch(() => {});
+  });
+
+  call.on('close', () => {
+    endCall();
+  });
+
+  call.on('error', (e) => {
+    console.error('Call error:', e);
+    endCall();
+  });
+}
+
+// ── Show call UI ───────────────────────────────────────────
+function showCallScreen(msg) {
+  joinScreen.style.display = 'none';
+  callScreen.style.display = 'block';
+  waitOverlay.style.display = 'flex';
+  waitText.textContent = msg || 'Waiting…';
+  localVideo.srcObject = localStream;
+}
+
+// ── End call ───────────────────────────────────────────────
+function endCall() {
+  if (currentCall) { try { currentCall.close(); } catch(e){} currentCall = null; }
+  remoteVideo.srcObject = null;
+  connDot.classList.remove('live');
+  connLabel.textContent = 'off';
+  callScreen.style.display = 'none';
+  joinScreen.style.display = 'flex';
+  peerInput.value = '';
+  setStatus('Call ended', '');
+}
+
+// ── Toggle mic ─────────────────────────────────────────────
+function toggleMic() {
+  if (!localStream) return;
+  micOn = !micOn;
+  localStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  document.getElementById('mic-btn').classList.toggle('muted-state', !micOn);
+  updateMicIcon();
+}
+
+function updateMicIcon() {
+  document.getElementById('mic-icon').innerHTML = micOn
+    ? `<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+       <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+       <line x1="12" y1="19" x2="12" y2="23"/>
+       <line x1="8" y1="23" x2="16" y2="23"/>`
+    : `<line x1="1" y1="1" x2="23" y2="23"/>
+       <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+       <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+       <line x1="12" y1="19" x2="12" y2="23"/>
+       <line x1="8" y1="23" x2="16" y2="23"/>`;
+}
+
+// ── Toggle camera ──────────────────────────────────────────
+function toggleCam() {
+  if (!localStream) return;
+  camOn = !camOn;
+  localStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  document.getElementById('cam-btn').classList.toggle('muted-state', !camOn);
+}
+
+// ── Status text ────────────────────────────────────────────
+function setStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status-line' + (type ? ' ' + type : '');
+}
+
+// ── Draggable local PiP ────────────────────────────────────
+(function makeDraggable() {
+  const el = localVideo;
+  let startX, startY, startLeft, startTop, dragging = false;
+
+  function onStart(e) {
+    dragging = true;
+    const touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    const rect = el.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    el.classList.add('dragging');
+    e.preventDefault();
+  }
+
+  function onMove(e) {
+    if (!dragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    const W = window.innerWidth, H = window.innerHeight;
+    const rW = el.offsetWidth, rH = el.offsetHeight;
+    let left = Math.min(W - rW - 8, Math.max(8, startLeft + dx));
+    let top  = Math.min(H - rH - 8, Math.max(8, startTop + dy));
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+    el.style.right = 'auto';
+    e.preventDefault();
+  }
+
+  function onEnd() {
+    dragging = false;
+    el.classList.remove('dragging');
+  }
+
+  el.addEventListener('touchstart', onStart, { passive: false });
+  el.addEventListener('touchmove',  onMove,  { passive: false });
+  el.addEventListener('touchend',   onEnd);
+  el.addEventListener('mousedown',  onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup',   onEnd);
+})();
+
+// ── Tap call screen to show/hide controls ─────────────────
+(function controlsAutoHide() {
+  const bar = document.getElementById('controls-bar');
+  let hideTimer;
+  function showBar() {
+    bar.style.opacity = '1';
+    bar.style.pointerEvents = 'auto';
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      bar.style.opacity = '0';
+      bar.style.pointerEvents = 'none';
+    }, 4000);
+  }
+  callScreen.addEventListener('click', (e) => {
+    if (e.target.closest('.ctrl')) return; // don't hide when tapping a button
+    showBar();
+  });
+  callScreen.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.ctrl')) return;
+    showBar();
+  }, { passive: true });
+  // Show on first load
+  showBar();
+  // Smooth transition
+  bar.style.transition = 'opacity 0.3s';
+})();
+
+// ── Boot ───────────────────────────────────────────────────
+(async function boot() {
+  const ok = await getMedia();
+  if (ok) initPeer();
+})();
+
+// ── Enter key to call ──────────────────────────────────────
+peerInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') startCall();
+});
+peerInput.addEventListener('input', () => {
+  peerInput.value = peerInput.value.replace(/\D/g, '').slice(0, CODE_LEN);
+});
+</script>
+</body>
+</html>
