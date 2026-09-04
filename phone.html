@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Phone</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0e0e0e;
+  --surface:  #1a1a1a;
+  --surface2: #242424;
+  --border:   rgba(255,255,255,0.08);
+  --amber:    #f5a623;
+  --amber-dk: #c4841a;
+  --green:    #34d058;
+  --red:      #f03e3e;
+  --text:     #f2f2f2;
+  --muted:    rgba(242,242,242,0.4);
+  --muted2:   rgba(242,242,242,0.15);
+}
+
+html, body {
+  height: 100%; background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ══════════════ SCREENS ══════════════ */
+.screen {
+  position: fixed; inset: 0;
+  display: none; flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.screen.active { display: flex; }
+
+/* ══════════════ HOME SCREEN ══════════════ */
+#home-screen {
+  padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+}
+
+.home-top {
+  width: 100%; padding: 20px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.my-number-block { display: flex; flex-direction: column; }
+.my-number-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 2px; }
+.my-number-value {
+  font-size: 1.6rem; font-weight: 700; letter-spacing: 0.12em;
+  color: var(--amber); cursor: pointer; display: flex; align-items: center; gap: 8px;
+}
+.my-number-value svg { opacity: 0.5; }
+
+.settings-btn {
+  background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px;
+  border-radius: 50%;
+}
+.settings-btn:active { background: var(--surface); }
+
+/* Tabs */
+.tabs {
+  width: 100%; display: flex; border-bottom: 1px solid var(--border);
+  margin-top: 20px;
+}
+.tab {
+  flex: 1; background: none; border: none;
+  color: var(--muted); font-size: 0.82rem; font-weight: 500;
+  padding: 12px 0; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+.tab-panel { display: none; width: 100%; flex: 1; }
+.tab-panel.active { display: flex; flex-direction: column; }
+
+/* ── Dialpad panel ── */
+#dial-panel {
+  padding: 16px 24px 12px;
+  align-items: center;
+}
+
+.dial-display {
+  font-size: 2.6rem; font-weight: 300; letter-spacing: 0.18em;
+  color: var(--text); min-height: 56px; text-align: center;
+  margin-bottom: 4px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  position: relative;
+}
+.dial-display-text { flex: 1; text-align: center; }
+.dial-backspace {
+  position: absolute; right: 0;
+  background: none; border: none; color: var(--muted); padding: 8px; cursor: pointer;
+}
+.dial-backspace:active { color: var(--text); }
+
+.dialpad {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; width: 100%; max-width: 300px; margin: 12px auto 16px;
+}
+.dp-key {
+  background: var(--surface); border: none; border-radius: 50%;
+  width: 72px; height: 72px; margin: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text);
+  transition: background 0.15s;
+}
+.dp-key:active { background: var(--surface2); transform: scale(0.95); }
+.dp-num { font-size: 1.4rem; font-weight: 400; line-height: 1; }
+.dp-sub { font-size: 0.5rem; letter-spacing: 0.12em; color: var(--muted); margin-top: 2px; min-height: 8px; }
+
+.dial-call-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 24px; margin-bottom: 8px;
+}
+.btn-call-dial {
+  width: 68px; height: 68px; border-radius: 50%; border: none;
+  background: var(--green); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(52,208,88,0.35);
+}
+.btn-call-dial:active { transform: scale(0.94); }
+
+/* ── Contacts panel ── */
+#contacts-panel { padding: 0; }
+
+.contacts-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 10px;
+}
+.contacts-header span { font-size: 0.75rem; color: var(--muted); }
+.btn-add-contact {
+  background: var(--amber); color: #000; border: none; border-radius: 20px;
+  font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer;
+}
+.btn-add-contact:active { opacity: 0.8; }
+
+.contact-list { width: 100%; }
+.contact-item {
+  display: flex; align-items: center; padding: 13px 20px;
+  border-bottom: 1px solid var(--border); gap: 14px;
+  cursor: pointer; transition: background 0.15s;
+}
+.contact-item:active { background: var(--surface); }
+.contact-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center;
+  justify-content: center; font-size: 1rem; font-weight: 600;
+  color: var(--amber); flex-shrink: 0;
+}
+.contact-info { flex: 1; }
+.contact-name { font-size: 0.95rem; font-weight: 500; }
+.contact-num { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.06em; margin-top: 2px; }
+.contact-actions { display: flex; gap: 10px; }
+.btn-contact-call {
+  background: none; border: 1px solid var(--border); border-radius: 50%;
+  width: 36px; height: 36px; color: var(--green);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.btn-contact-call:active { background: var(--surface); }
+.btn-contact-del {
+  background: none; border: 1px solid var(--border); border-radius: 50%;
+  width: 36px; height: 36px; color: var(--red);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.btn-contact-del:active { background: var(--surface); }
+
+.empty-contacts {
+  padding: 48px 20px; text-align: center;
+  color: var(--muted); font-size: 0.85rem; line-height: 1.6;
+}
+
+/* ══════════════ SETTINGS MODAL ══════════════ */
+#settings-modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.7);
+  display: none; align-items: flex-end; justify-content: center;
+}
+#settings-modal.open { display: flex; }
+.modal-sheet {
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 480px;
+  padding: 16px 24px calc(env(safe-area-inset-bottom,0px) + 24px);
+}
+.modal-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--border); margin: 0 auto 20px;
+}
+.modal-title { font-size: 1rem; font-weight: 600; margin-bottom: 20px; }
+.modal-field { margin-bottom: 16px; }
+.modal-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.04em; }
+.modal-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-size: 1.1rem; font-weight: 600;
+  letter-spacing: 0.12em; padding: 12px 14px; outline: none;
+  -webkit-appearance: none; inputmode: numeric;
+}
+.modal-input:focus { border-color: var(--amber); }
+.modal-hint { font-size: 0.7rem; color: var(--muted); margin-top: 5px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+.btn-modal-cancel {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--text); font-size: 0.9rem;
+  font-weight: 500; padding: 13px; cursor: pointer;
+}
+.btn-modal-save {
+  flex: 2; background: var(--amber); border: none;
+  border-radius: 12px; color: #000; font-size: 0.9rem;
+  font-weight: 700; padding: 13px; cursor: pointer;
+}
+.btn-modal-save:active { opacity: 0.85; }
+
+/* Contact Add Modal */
+#add-contact-modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.7);
+  display: none; align-items: flex-end; justify-content: center;
+}
+#add-contact-modal.open { display: flex; }
+
+/* ══════════════ INCOMING SCREEN ══════════════ */
+#incoming-screen {
+  background: linear-gradient(180deg, #1a1a1a 0%, #0e0e0e 100%);
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top,0px) + 60px) 24px
+           calc(env(safe-area-inset-bottom,0px) + 40px);
+}
+
+.incoming-top { text-align: center; }
+.incoming-label { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 20px; }
+.incoming-avatar {
+  width: 96px; height: 96px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center;
+  justify-content: center; font-size: 2.2rem; font-weight: 700;
+  color: var(--amber); margin: 0 auto 20px;
+  box-shadow: 0 0 0 8px rgba(245,166,35,0.08), 0 0 0 16px rgba(245,166,35,0.04);
+  animation: inRing 2s ease-in-out infinite;
+}
+@keyframes inRing {
+  0%,100% { box-shadow: 0 0 0 8px rgba(245,166,35,0.08), 0 0 0 16px rgba(245,166,35,0.04); }
+  50%      { box-shadow: 0 0 0 14px rgba(245,166,35,0.12), 0 0 0 26px rgba(245,166,35,0.05); }
+}
+.incoming-name { font-size: 1.8rem; font-weight: 600; margin-bottom: 6px; }
+.incoming-num  { font-size: 0.9rem; color: var(--muted); letter-spacing: 0.1em; }
+
+.incoming-actions {
+  display: flex; justify-content: center; gap: 56px;
+}
+.btn-reject {
+  width: 68px; height: 68px; border-radius: 50%; border: none;
+  background: var(--red); color: #fff; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; box-shadow: 0 4px 20px rgba(240,62,62,0.4);
+}
+.btn-accept {
+  width: 68px; height: 68px; border-radius: 50%; border: none;
+  background: var(--green); color: #fff; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; box-shadow: 0 4px 20px rgba(52,208,88,0.4);
+}
+.btn-reject:active, .btn-accept:active { transform: scale(0.93); }
+.btn-action-label { font-size: 0.6rem; font-weight: 500; margin-top: 4px; }
+
+/* ══════════════ ACTIVE CALL SCREEN ══════════════ */
+#call-screen {
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top,0px) + 24px) 0
+           calc(env(safe-area-inset-bottom,0px) + 28px);
+}
+
+.call-top {
+  width: 100%; text-align: center; padding: 0 24px;
+}
+.call-stopwatch {
+  font-size: 0.85rem; color: var(--amber);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.06em;
+  margin-bottom: 20px; min-height: 18px;
+}
+.call-avatar {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center;
+  justify-content: center; font-size: 1.8rem; font-weight: 700;
+  color: var(--amber); margin: 0 auto 14px;
+}
+.call-name  { font-size: 1.5rem; font-weight: 600; margin-bottom: 4px; }
+.call-num   { font-size: 0.82rem; color: var(--muted); letter-spacing: 0.1em; }
+.call-type-badge {
+  display: inline-block; margin-top: 8px;
+  font-size: 0.65rem; color: var(--muted); letter-spacing: 0.08em;
+  background: var(--surface); border-radius: 20px; padding: 3px 10px;
+}
+
+/* Video area */
+#video-area {
+  display: none; position: relative;
+  width: 100%; flex: 1; max-height: 50vh; overflow: hidden;
+}
+#video-area.visible { display: block; }
+#remote-video {
+  width: 100%; height: 100%; object-fit: cover; background: #111; display: block;
+}
+#local-pip {
+  position: absolute; top: 8px; right: 8px;
+  width: 90px; height: 120px; border-radius: 10px;
+  object-fit: cover; background: #1a1a1a;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  touch-action: none; cursor: grab; z-index: 5;
+}
+
+/* Controls grid */
+.call-controls {
+  width: 100%; padding: 0 24px;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px 8px;
+}
+.call-ctrl {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.call-ctrl-icon {
+  width: 58px; height: 58px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  color: var(--text); transition: background 0.15s;
+  border: 1px solid var(--border);
+}
+.call-ctrl:active .call-ctrl-icon { background: var(--surface2); }
+.call-ctrl.on .call-ctrl-icon { background: rgba(255,255,255,0.92); color: #000; }
+.call-ctrl-label { font-size: 0.62rem; color: var(--muted); }
+
+.btn-end-call {
+  grid-column: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.btn-end-call .call-ctrl-icon {
+  background: var(--red); border-color: transparent;
+  box-shadow: 0 4px 16px rgba(240,62,62,0.4);
+}
+.btn-end-call:active .call-ctrl-icon { opacity: 0.8; }
+.btn-end-call .call-ctrl-label { color: var(--muted); }
+
+/* Toast */
+#toast {
+  position: fixed; top: calc(env(safe-area-inset-top,0px) + 12px); left: 50%;
+  transform: translateX(-50%) translateY(-60px);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 8px 18px;
+  font-size: 0.78rem; color: var(--text);
+  z-index: 200; white-space: nowrap;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+svg { display: block; flex-shrink: 0; }
+button { -webkit-appearance: none; }
+</style>
+</head>
+<body>
+
+<!-- ══ HOME SCREEN ══ -->
+<div class="screen active" id="home-screen">
+  <div class="home-top">
+    <div class="my-number-block">
+      <div class="my-number-label">your number</div>
+      <div class="my-number-value" id="my-num-display" onclick="copyMyNumber()">
+        <span id="my-num-text">····</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </div>
+    </div>
+    <button class="settings-btn" onclick="openSettings()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dial')">Keypad</button>
+    <button class="tab" onclick="switchTab('contacts')">Contacts</button>
+  </div>
+
+  <!-- Keypad -->
+  <div class="tab-panel active" id="dial-panel">
+    <div class="dial-display">
+      <span class="dial-display-text" id="dial-num"></span>
+      <button class="dial-backspace" id="backspace-btn" onclick="dialBackspace()" style="display:none">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="dialpad">
+      <button class="dp-key" onclick="dialDigit('1')"><span class="dp-num">1</span><span class="dp-sub"></span></button>
+      <button class="dp-key" onclick="dialDigit('2')"><span class="dp-num">2</span><span class="dp-sub">ABC</span></button>
+      <button class="dp-key" onclick="dialDigit('3')"><span class="dp-num">3</span><span class="dp-sub">DEF</span></button>
+      <button class="dp-key" onclick="dialDigit('4')"><span class="dp-num">4</span><span class="dp-sub">GHI</span></button>
+      <button class="dp-key" onclick="dialDigit('5')"><span class="dp-num">5</span><span class="dp-sub">JKL</span></button>
+      <button class="dp-key" onclick="dialDigit('6')"><span class="dp-num">6</span><span class="dp-sub">MNO</span></button>
+      <button class="dp-key" onclick="dialDigit('7')"><span class="dp-num">7</span><span class="dp-sub">PQRS</span></button>
+      <button class="dp-key" onclick="dialDigit('8')"><span class="dp-num">8</span><span class="dp-sub">TUV</span></button>
+      <button class="dp-key" onclick="dialDigit('9')"><span class="dp-num">9</span><span class="dp-sub">WXYZ</span></button>
+      <button class="dp-key" onclick="dialDigit('*')"><span class="dp-num" style="font-size:1.8rem">*</span><span class="dp-sub"></span></button>
+      <button class="dp-key" onclick="dialDigit('0')"><span class="dp-num">0</span><span class="dp-sub">+</span></button>
+      <button class="dp-key" onclick="dialDigit('#')"><span class="dp-num">#</span><span class="dp-sub"></span></button>
+    </div>
+
+    <div class="dial-call-row">
+      <button class="btn-call-dial" onclick="makeCall()">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.9a16 16 0 0 0 6.16 6.16l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Contacts -->
+  <div class="tab-panel" id="contacts-panel">
+    <div class="contacts-header">
+      <span id="contacts-count">0 contacts</span>
+      <button class="btn-add-contact" onclick="openAddContact()">+ Add</button>
+    </div>
+    <div class="contact-list" id="contact-list"></div>
+  </div>
+</div>
+
+<!-- ══ INCOMING SCREEN ══ -->
+<div class="screen" id="incoming-screen">
+  <div class="incoming-top">
+    <div class="incoming-label">Incoming call</div>
+    <div class="incoming-avatar" id="inc-avatar">?</div>
+    <div class="incoming-name" id="inc-name">Unknown</div>
+    <div class="incoming-num"  id="inc-num">····</div>
+  </div>
+  <div class="incoming-actions">
+    <button class="btn-reject" onclick="rejectCall()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.45-2.94z"/>
+        <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <span class="btn-action-label">Decline</span>
+    </button>
+    <button class="btn-accept" onclick="acceptCall()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.9a16 16 0 0 0 6.16 6.16l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      <span class="btn-action-label">Accept</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══ ACTIVE CALL SCREEN ══ -->
+<div class="screen" id="call-screen">
+  <div class="call-top">
+    <div class="call-stopwatch" id="stopwatch">connecting…</div>
+    <div class="call-avatar" id="call-avatar">?</div>
+    <div class="call-name"  id="call-name">—</div>
+    <div class="call-num"   id="call-num">····</div>
+    <div class="call-type-badge" id="call-type-badge">audio call</div>
+  </div>
+
+  <!-- Video area (hidden until video call) -->
+  <div id="video-area">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-pip"    autoplay playsinline muted></video>
+  </div>
+
+  <div class="call-controls">
+    <!-- Row 1 -->
+    <button class="call-ctrl" id="ctrl-mic" onclick="toggleMic()">
+      <div class="call-ctrl-icon">
+        <svg id="mic-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <span class="call-ctrl-label" id="mic-label">Mute</span>
+    </button>
+
+    <button class="call-ctrl" id="ctrl-speaker" onclick="toggleSpeaker()">
+      <div class="call-ctrl-icon">
+        <svg id="spk-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </div>
+      <span class="call-ctrl-label" id="spk-label">Speaker</span>
+    </button>
+
+    <button class="call-ctrl" id="ctrl-video" onclick="toggleVideo()">
+      <div class="call-ctrl-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="23 7 16 12 23 17 23 7"/>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+      </div>
+      <span class="call-ctrl-label">Video</span>
+    </button>
+
+    <!-- Row 2 -->
+    <div></div><!-- spacer -->
+
+    <button class="btn-end-call" onclick="endCall()">
+      <div class="call-ctrl-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 2 2 0 0 1-.45-2.94z"/>
+          <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <span class="call-ctrl-label">End</span>
+    </button>
+
+    <button class="call-ctrl" id="ctrl-flip" onclick="flipCamera()" style="display:none">
+      <div class="call-ctrl-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+          <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+        </svg>
+      </div>
+      <span class="call-ctrl-label">Flip</span>
+    </button>
+  </div>
+</div>
+
+<!-- ══ SETTINGS MODAL ══ -->
+<div id="settings-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Your number</div>
+    <div class="modal-field">
+      <div class="modal-label">Current number</div>
+      <div style="font-size:1.8rem;font-weight:700;letter-spacing:0.14em;color:var(--amber);margin-bottom:4px" id="settings-cur-num">····</div>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Set a custom number (4 digits)</div>
+      <input type="tel" class="modal-input" id="custom-num-input" placeholder="e.g. 8421" maxlength="4" inputmode="numeric" pattern="[0-9]*" />
+      <div class="modal-hint" id="custom-hint">Choose any 4-digit number. Your current number becomes available to others.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-modal-save"   onclick="saveCustomNumber()">Save number</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD CONTACT MODAL ══ -->
+<div id="add-contact-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add contact</div>
+    <div class="modal-field">
+      <div class="modal-label">Name</div>
+      <input type="text" class="modal-input" id="contact-name-input" placeholder="e.g. Ahmed" style="letter-spacing:normal;font-size:1rem" maxlength="24" />
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Their number (4 digits)</div>
+      <input type="tel" class="modal-input" id="contact-num-input" placeholder="e.g. 5583" maxlength="4" inputmode="numeric" pattern="[0-9]*" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeAddContact()">Cancel</button>
+      <button class="btn-modal-save"   onclick="saveContact()">Save contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Hidden audio elements -->
+<audio id="remote-audio" autoplay></audio>
+<audio id="ring-tone" loop>
+  <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA..." type="audio/wav">
+</audio>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE & STORAGE
+// ══════════════════════════════════════════════
+const LS_MY_NUM    = 'phone_my_number';
+const LS_CONTACTS  = 'phone_contacts';
+const LS_CUSTOM    = 'phone_custom_number';
+
+let myNumber     = '';
+let contacts     = [];
+let peer         = null;
+let localStream  = null;    // audio only initially
+let localVideoStream = null; // video track added later
+let currentCall  = null;
+let pendingCall  = null;    // incoming while ringing
+let isVideo      = false;
+let micMuted     = false;
+let speakerOn    = false;
+let facingMode   = 'user';
+let swTimer      = null;
+let swSeconds    = 0;
+let callConnected= false;
+
+// ── Load storage ──────────────────────────────
+function loadStorage() {
+  const saved = localStorage.getItem(LS_MY_NUM);
+  const custom = localStorage.getItem(LS_CUSTOM);
+
+  if (custom) {
+    myNumber = custom;
+  } else if (saved) {
+    myNumber = saved;
+  } else {
+    myNumber = genRandom4();
+    localStorage.setItem(LS_MY_NUM, myNumber);
+  }
+
+  const c = localStorage.getItem(LS_CONTACTS);
+  contacts = c ? JSON.parse(c) : [];
+}
+
+function saveContacts() {
+  localStorage.setItem(LS_CONTACTS, JSON.stringify(contacts));
+}
+
+function genRandom4() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+// ══════════════════════════════════════════════
+//  PEERJS INIT
+// ══════════════════════════════════════════════
+const PEER_CFG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ]
+  }
+};
+
+function initPeer(id) {
+  if (peer) { try { peer.destroy(); } catch(e){} }
+
+  peer = new Peer(id, PEER_CFG);
+
+  peer.on('open', (assignedId) => {
+    myNumber = assignedId;
+    document.getElementById('my-num-text').textContent = myNumber;
+    document.getElementById('settings-cur-num').textContent = myNumber;
+    // Only save auto-assigned if no custom
+    if (!localStorage.getItem(LS_CUSTOM)) {
+      localStorage.setItem(LS_MY_NUM, myNumber);
+    }
+    toast('Ready — your number is ' + myNumber);
+  });
+
+  peer.on('call', (incomingCall) => {
+    // Reject if already in a call
+    if (currentCall) {
+      incomingCall.close();
+      return;
+    }
+    pendingCall = incomingCall;
+    const callerId = incomingCall.peer;
+    const contact  = contacts.find(c => c.num === callerId);
+    document.getElementById('inc-avatar').textContent = contact ? contact.name[0].toUpperCase() : '?';
+    document.getElementById('inc-name').textContent   = contact ? contact.name : 'Unknown';
+    document.getElementById('inc-num').textContent    = callerId;
+    showScreen('incoming-screen');
+    playRingTone(true);
+  });
+
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') {
+      toast('Number ' + id + ' is taken — generating a new one');
+      const newId = genRandom4();
+      localStorage.setItem(LS_MY_NUM, newId);
+      localStorage.removeItem(LS_CUSTOM);
+      initPeer(newId);
+      return;
+    }
+    toast('Connection error: ' + e.type);
+    console.error(e);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  MEDIA
+// ══════════════════════════════════════════════
+async function ensureAudioStream() {
+  if (localStream) return true;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false
+    });
+    return true;
+  } catch(e) {
+    toast('Microphone access blocked — allow and reload');
+    return false;
+  }
+}
+
+async function ensureVideoStream() {
+  if (localVideoStream) return true;
+  try {
+    localVideoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      audio: false
+    });
+    return true;
+  } catch(e) {
+    toast('Camera access blocked');
+    return false;
+  }
+}
+
+function getCombinedStream() {
+  // Returns stream with current audio + optional video
+  const tracks = [];
+  if (localStream) localStream.getAudioTracks().forEach(t => tracks.push(t));
+  if (isVideo && localVideoStream) localVideoStream.getVideoTracks().forEach(t => tracks.push(t));
+  return new MediaStream(tracks);
+}
+
+// ══════════════════════════════════════════════
+//  CALL FLOW
+// ══════════════════════════════════════════════
+async function makeCall(numberOverride) {
+  const target = numberOverride || document.getElementById('dial-num').textContent.trim();
+  if (!target || target.length < 4) { toast('Enter a 4-digit number'); return; }
+  if (target === myNumber) { toast("That's your own number"); return; }
+
+  const ok = await ensureAudioStream();
+  if (!ok) return;
+
+  const contact = contacts.find(c => c.num === target);
+  setCallInfo(contact ? contact.name : 'Unknown', target);
+  isVideo = false;
+  showScreen('call-screen');
+  updateCallBadge();
+
+  const stream = getCombinedStream();
+  const call = peer.call(target, stream);
+  currentCall = call;
+  wireCallEvents(call);
+}
+
+function wireCallEvents(call) {
+  call.on('stream', (remoteStream) => {
+    callConnected = true;
+    // Route audio
+    const remAudio = document.getElementById('remote-audio');
+    remAudio.srcObject = remoteStream;
+    remAudio.play().catch(() => {});
+    // Route video if present
+    const remVideo = document.getElementById('remote-video');
+    remVideo.srcObject = remoteStream;
+    startStopwatch();
+    document.getElementById('stopwatch').textContent = '00:00';
+    updateCallBadge();
+  });
+
+  call.on('close', () => { endCall(true); });
+  call.on('error', (e) => { console.error(e); endCall(true); });
+}
+
+function acceptCall() {
+  if (!pendingCall) return;
+  playRingTone(false);
+
+  ensureAudioStream().then(ok => {
+    if (!ok) { rejectCall(); return; }
+    const call = pendingCall;
+    pendingCall = null;
+    currentCall = call;
+
+    const callerId = call.peer;
+    const contact  = contacts.find(c => c.num === callerId);
+    setCallInfo(contact ? contact.name : 'Unknown', callerId);
+    isVideo = false;
+    showScreen('call-screen');
+    updateCallBadge();
+
+    const stream = getCombinedStream();
+    call.answer(stream);
+    wireCallEvents(call);
+  });
+}
+
+function rejectCall() {
+  playRingTone(false);
+  if (pendingCall) { try { pendingCall.close(); } catch(e){} pendingCall = null; }
+  showScreen('home-screen');
+  toast('Call declined');
+}
+
+function endCall(remote) {
+  playRingTone(false);
+  stopStopwatch();
+  callConnected = false;
+  isVideo = false;
+
+  if (currentCall) { try { currentCall.close(); } catch(e){} currentCall = null; }
+
+  // Stop video tracks (don't stop audio — keep it for next call)
+  if (localVideoStream) {
+    localVideoStream.getTracks().forEach(t => t.stop());
+    localVideoStream = null;
+  }
+
+  document.getElementById('remote-audio').srcObject = null;
+  document.getElementById('remote-video').srcObject = null;
+  document.getElementById('local-pip').srcObject = null;
+  document.getElementById('video-area').classList.remove('visible');
+  document.getElementById('ctrl-flip').style.display = 'none';
+
+  // Reset controls
+  micMuted = false; speakerOn = false;
+  document.getElementById('ctrl-mic').classList.remove('on');
+  document.getElementById('ctrl-speaker').classList.remove('on');
+  document.getElementById('ctrl-video').classList.remove('on');
+  updateMicIcon(false);
+
+  showScreen('home-screen');
+  if (remote) toast('Call ended');
+}
+
+// ══════════════════════════════════════════════
+//  IN-CALL CONTROLS
+// ══════════════════════════════════════════════
+function toggleMic() {
+  micMuted = !micMuted;
+  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+  document.getElementById('ctrl-mic').classList.toggle('on', micMuted);
+  document.getElementById('mic-label').textContent = micMuted ? 'Unmute' : 'Mute';
+  updateMicIcon(micMuted);
+}
+
+function updateMicIcon(muted) {
+  document.getElementById('mic-icon').innerHTML = muted
+    ? `<line x1="1" y1="1" x2="23" y2="23"/>
+       <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+       <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+       <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>`
+    : `<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+       <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+       <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>`;
+}
+
+function toggleSpeaker() {
+  speakerOn = !speakerOn;
+  document.getElementById('ctrl-speaker').classList.toggle('on', speakerOn);
+  document.getElementById('spk-label').textContent = speakerOn ? 'Earpiece' : 'Speaker';
+  // setSinkId works in Chrome; on iOS this is system-level, nothing to do in browser
+  const audio = document.getElementById('remote-audio');
+  if (audio.setSinkId) {
+    audio.setSinkId(speakerOn ? 'default' : '').catch(() => {});
+  }
+  toast(speakerOn ? 'Speaker on' : 'Earpiece mode');
+}
+
+async function toggleVideo() {
+  if (!isVideo) {
+    // Switch to video call
+    const ok = await ensureVideoStream();
+    if (!ok) return;
+    isVideo = true;
+    document.getElementById('ctrl-video').classList.add('on');
+    document.getElementById('ctrl-flip').style.display = 'flex';
+    document.getElementById('video-area').classList.add('visible');
+    document.getElementById('local-pip').srcObject = localVideoStream;
+
+    // Replace track in the peer connection
+    if (currentCall && currentCall.peerConnection) {
+      const videoTrack = localVideoStream.getVideoTracks()[0];
+      const senders = currentCall.peerConnection.getSenders();
+      const hasVideo = senders.some(s => s.track && s.track.kind === 'video');
+      if (hasVideo) {
+        const vs = senders.find(s => s.track && s.track.kind === 'video');
+        vs.replaceTrack(videoTrack).catch(() => {});
+      } else {
+        currentCall.peerConnection.addTrack(videoTrack, getCombinedStream());
+      }
+    }
+    updateCallBadge();
+    toast('Video on');
+  } else {
+    // Back to audio only
+    isVideo = false;
+    document.getElementById('ctrl-video').classList.remove('on');
+    document.getElementById('ctrl-flip').style.display = 'none';
+    document.getElementById('video-area').classList.remove('visible');
+
+    if (localVideoStream) {
+      localVideoStream.getTracks().forEach(t => t.stop());
+      localVideoStream = null;
+    }
+    updateCallBadge();
+    toast('Video off');
+  }
+}
+
+async function flipCamera() {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  if (localVideoStream) {
+    localVideoStream.getTracks().forEach(t => t.stop());
+    localVideoStream = null;
+  }
+  const ok = await ensureVideoStream();
+  if (!ok) return;
+  document.getElementById('local-pip').srcObject = localVideoStream;
+
+  if (currentCall && currentCall.peerConnection) {
+    const videoTrack = localVideoStream.getVideoTracks()[0];
+    const senders = currentCall.peerConnection.getSenders();
+    const vs = senders.find(s => s.track && s.track.kind === 'video');
+    if (vs) vs.replaceTrack(videoTrack).catch(() => {});
+  }
+}
+
+// ══════════════════════════════════════════════
+//  STOPWATCH
+// ══════════════════════════════════════════════
+function startStopwatch() {
+  stopStopwatch();
+  swSeconds = 0;
+  swTimer = setInterval(() => {
+    swSeconds++;
+    const h = Math.floor(swSeconds / 3600);
+    const m = Math.floor((swSeconds % 3600) / 60);
+    const s = swSeconds % 60;
+    const str = h
+      ? `${pad(h)}:${pad(m)}:${pad(s)}`
+      : `${pad(m)}:${pad(s)}`;
+    document.getElementById('stopwatch').textContent = str;
+  }, 1000);
+}
+function stopStopwatch() {
+  if (swTimer) { clearInterval(swTimer); swTimer = null; }
+  document.getElementById('stopwatch').textContent = 'connecting…';
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// ══════════════════════════════════════════════
+//  RINGTONE (generated beep)
+// ══════════════════════════════════════════════
+let ringCtx = null, ringOsc = null, ringGain = null, ringPlaying = false;
+
+function playRingTone(on) {
+  if (on && !ringPlaying) {
+    try {
+      ringCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      ringGain = ringCtx.createGain();
+      ringGain.gain.value = 0.4;
+      ringGain.connect(ringCtx.destination);
+
+      function beep() {
+        if (!ringPlaying) return;
+        const osc = ringCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        osc.connect(ringGain);
+        osc.start();
+        osc.stop(ringCtx.currentTime + 0.15);
+        osc.onended = () => {
+          if (!ringPlaying) return;
+          const osc2 = ringCtx.createOscillator();
+          osc2.type = 'sine';
+          osc2.frequency.value = 880;
+          osc2.connect(ringGain);
+          osc2.start(ringCtx.currentTime + 0.1);
+          osc2.stop(ringCtx.currentTime + 0.25);
+          osc2.onended = () => {
+            if (ringPlaying) setTimeout(beep, 1800);
+          };
+        };
+      }
+      ringPlaying = true;
+      beep();
+    } catch(e) {}
+  } else if (!on && ringPlaying) {
+    ringPlaying = false;
+    try { ringCtx.close(); } catch(e) {}
+  }
+}
+
+// ══════════════════════════════════════════════
+//  DIALPAD
+// ══════════════════════════════════════════════
+function dialDigit(d) {
+  const el = document.getElementById('dial-num');
+  if (el.textContent.length >= 4) return;
+  el.textContent += d;
+  document.getElementById('backspace-btn').style.display = el.textContent ? '' : 'none';
+}
+function dialBackspace() {
+  const el = document.getElementById('dial-num');
+  el.textContent = el.textContent.slice(0, -1);
+  document.getElementById('backspace-btn').style.display = el.textContent ? '' : 'none';
+}
+
+// ══════════════════════════════════════════════
+//  CONTACTS
+// ══════════════════════════════════════════════
+function renderContacts() {
+  const list  = document.getElementById('contact-list');
+  const count = document.getElementById('contacts-count');
+  count.textContent = contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '');
+  list.innerHTML = '';
+
+  if (!contacts.length) {
+    list.innerHTML = '<div class="empty-contacts">No contacts yet.<br>Add one with the button above.</div>';
+    return;
+  }
+
+  contacts.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'contact-item';
+    div.innerHTML = `
+      <div class="contact-avatar">${c.name[0].toUpperCase()}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(c.name)}</div>
+        <div class="contact-num">${c.num}</div>
+      </div>
+      <div class="contact-actions">
+        <button class="btn-contact-call" onclick="makeCall('${c.num}')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.9a16 16 0 0 0 6.16 6.16l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+        </button>
+        <button class="btn-contact-del" onclick="deleteContact(${i})">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function deleteContact(i) {
+  contacts.splice(i, 1);
+  saveContacts();
+  renderContacts();
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════
+function openSettings() {
+  document.getElementById('settings-cur-num').textContent = myNumber;
+  document.getElementById('custom-num-input').value = '';
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+
+function saveCustomNumber() {
+  const val = document.getElementById('custom-num-input').value.trim().replace(/\D/g,'');
+  if (val.length !== 4) { toast('Enter exactly 4 digits'); return; }
+  if (val === myNumber)  { toast("That's already your number"); closeSettings(); return; }
+
+  closeSettings();
+  localStorage.setItem(LS_CUSTOM, val);
+  initPeer(val);
+  toast('Switching to ' + val + '…');
+}
+
+function openAddContact() {
+  document.getElementById('contact-name-input').value = '';
+  document.getElementById('contact-num-input').value  = '';
+  document.getElementById('add-contact-modal').classList.add('open');
+  setTimeout(() => document.getElementById('contact-name-input').focus(), 100);
+}
+function closeAddContact() {
+  document.getElementById('add-contact-modal').classList.remove('open');
+}
+
+function saveContact() {
+  const name = document.getElementById('contact-name-input').value.trim();
+  const num  = document.getElementById('contact-num-input').value.trim().replace(/\D/g,'');
+  if (!name)          { toast('Enter a name'); return; }
+  if (num.length !== 4) { toast('Enter a 4-digit number'); return; }
+  if (contacts.some(c => c.num === num)) { toast('Contact with that number exists'); return; }
+
+  contacts.push({ name, num });
+  saveContacts();
+  renderContacts();
+  closeAddContact();
+  toast(name + ' saved');
+}
+
+// ══════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && tab === 'dial') || (i === 1 && tab === 'contacts'));
+  });
+  document.getElementById('dial-panel').classList.toggle('active', tab === 'dial');
+  document.getElementById('contacts-panel').classList.toggle('active', tab === 'contacts');
+}
+
+function setCallInfo(name, num) {
+  document.getElementById('call-avatar').textContent = name !== 'Unknown' ? name[0].toUpperCase() : '?';
+  document.getElementById('call-name').textContent = name;
+  document.getElementById('call-num').textContent  = num;
+}
+
+function updateCallBadge() {
+  document.getElementById('call-type-badge').textContent = isVideo ? 'video call' : 'audio call';
+}
+
+function copyMyNumber() {
+  navigator.clipboard.writeText(myNumber).then(() => toast('Copied ' + myNumber)).catch(() => {});
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ══════════════════════════════════════════════
+//  DRAGGABLE PiP
+// ══════════════════════════════════════════════
+(function() {
+  const el = document.getElementById('local-pip');
+  let sx, sy, sl, st, drag = false;
+  function start(e) {
+    drag = true; el.classList.add('dragging');
+    const t = e.touches?.[0] || e;
+    sx = t.clientX; sy = t.clientY;
+    const r = el.getBoundingClientRect();
+    sl = r.left; st = r.top; e.preventDefault();
+  }
+  function move(e) {
+    if (!drag) return;
+    const t = e.touches?.[0] || e;
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    const W = window.innerWidth, H = window.innerHeight;
+    const left = Math.min(W - el.offsetWidth - 8, Math.max(8, sl + dx));
+    const top  = Math.min(H - el.offsetHeight - 8, Math.max(8, st + dy));
+    el.style.cssText += `;left:${left}px;top:${top}px;right:auto;`;
+    e.preventDefault();
+  }
+  function end() { drag = false; el.classList.remove('dragging'); }
+  el.addEventListener('touchstart', start, { passive: false });
+  el.addEventListener('touchmove',  move,  { passive: false });
+  el.addEventListener('touchend',   end);
+  el.addEventListener('mousedown',  start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup',   end);
+})();
+
+// ══════════════════════════════════════════════
+//  MODAL CLOSE ON BACKDROP TAP
+// ══════════════════════════════════════════════
+document.getElementById('settings-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('settings-modal')) closeSettings();
+});
+document.getElementById('add-contact-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('add-contact-modal')) closeAddContact();
+});
+
+// Input filters
+document.getElementById('custom-num-input').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g,'').slice(0,4);
+});
+document.getElementById('contact-num-input').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g,'').slice(0,4);
+});
+document.getElementById('contact-name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') saveContact();
+});
+
+// ══════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════
+loadStorage();
+renderContacts();
+// Pre-fetch mic so it's ready (audio only, no video prompt yet)
+ensureAudioStream().then(() => {
+  initPeer(myNumber);
+});
+</script>
+</body>
+</html>
